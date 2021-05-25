@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -42,10 +42,9 @@ function! s:parse_with_bibtex(file) abort " {{{1
         \ ], tmp.aux)
 
   " Create the temporary bbl file
-  call vimtex#process#run('bibtex -terse ' . fnameescape(tmp.aux), {
-        \ 'background' : 0,
-        \ 'silent' : 1,
-        \})
+  call vimtex#process#run(
+        \ 'bibtex -terse ' . fnameescape(tmp.aux),
+        \ {'background' : 0})
 
   " Parse temporary bbl file
   let lines = join(readfile(tmp.bbl), "\n")
@@ -95,7 +94,7 @@ function! s:parse_with_bibtex_init() abort " {{{1
           \ 'bibtex is not executable and may not be used to parse bib files!')
   endif
 
-  " Check if bstfile contains whitespace (not handled by vimtex)
+  " Check if bstfile contains whitespace (not handled by VimTeX)
   if stridx(s:bibtex_bstfile, ' ') >= 0
     let l:oldbst = s:bibtex_bstfile . '.bst'
     let s:bibtex_bstfile = tempname()
@@ -113,8 +112,9 @@ function! s:parse_with_bibparse(file) abort " {{{1
   call s:parse_with_bibparse_init()
   if s:bibparse_not_executable | return [] | endif
 
-  call vimtex#process#run('bibparse ' . fnameescape(a:file)
-        \ . ' >_vimtex_bibparsed.log', {'background' : 0, 'silent' : 1})
+  call vimtex#process#run(
+        \ 'bibparse ' . fnameescape(a:file) . ' >_vimtex_bibparsed.log',
+        \ {'background' : 0})
   let l:lines = readfile('_vimtex_bibparsed.log')
   call delete('_vimtex_bibparsed.log')
 
@@ -177,9 +177,12 @@ function! s:parse_with_vim(file) abort " {{{1
   let l:current = {}
   let l:strings = {}
   let l:entries = []
-  for l:line in filter(readfile(a:file), 'v:val !~# ''^\s*\%(%\|$\)''')
+  let l:lnum = 0
+  for l:line in readfile(a:file)
+    let l:lnum += 1
+
     if empty(l:current)
-      if s:parse_type(l:line, l:current, l:strings)
+      if s:parse_type(a:file, l:lnum, l:line, l:current, l:strings, l:entries)
         let l:current = {}
       endif
       continue
@@ -201,7 +204,7 @@ endfunction
 
 " }}}1
 
-function! s:parse_type(line, current, strings) abort " {{{1
+function! s:parse_type(file, lnum, line, current, strings, entries) abort " {{{1
   let l:matches = matchlist(a:line, '\v^\@(\w+)\s*\{\s*(.*)')
   if empty(l:matches) | return 0 | endif
 
@@ -210,13 +213,19 @@ function! s:parse_type(line, current, strings) abort " {{{1
 
   let a:current.level = 1
   let a:current.body = ''
+  let a:current.vimtex_file = a:file
+  let a:current.vimtex_lnum = a:lnum
 
   if l:type ==# 'string'
     return s:parse_string(l:matches[2], a:current, a:strings)
   else
+    let l:matches = matchlist(l:matches[2], '\v^([^, ]*)\s*,\s*(.*)')
     let a:current.type = l:type
-    let a:current.key = matchstr(l:matches[2], '.*\ze,\s*')
-    return 0
+    let a:current.key = l:matches[1]
+
+    return empty(l:matches[2])
+          \ ? 0
+          \ : s:parse_entry(l:matches[2], a:current, a:entries)
   endif
 endfunction
 

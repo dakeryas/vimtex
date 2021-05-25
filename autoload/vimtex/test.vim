@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -11,12 +11,12 @@ function! vimtex#test#assert(condition) abort " {{{1
 endfunction
 
 " }}}1
-function! vimtex#test#assert_equal(x, y) abort " {{{1
-  if a:x ==# a:y | return 1 | endif
+function! vimtex#test#assert_equal(expect, observe) abort " {{{1
+  if a:expect ==# a:observe | return 1 | endif
 
   call s:fail([
-        \ 'x = ' . string(a:x),
-        \ 'y = ' . string(a:y),
+        \ 'expect:  ' . string(a:expect),
+        \ 'observe: ' . string(a:observe),
         \])
 endfunction
 
@@ -50,9 +50,37 @@ function! vimtex#test#keys(keys, context, expected) abort " {{{1
   call append(1, a:context)
   normal! ggdd
 
-  silent execute 'normal' a:keys
+  let l:fail_msg = ['keys: ' . a:keys]
+  let l:fail_msg += ['context:']
+  let l:fail_msg += map(copy(a:context), '"  " . v:val')
+  let l:fail_msg += ['expected:']
+  let l:fail_msg += map(copy(a:expected), '"  " . v:val')
 
-  call vimtex#test#assert_equal(getline(1, line('$')), a:expected)
+  try
+    silent execute 'normal' a:keys
+  catch
+    let l:fail_msg += ['error:']
+    let l:fail_msg += ['  ' . v:exception]
+    call s:fail(l:fail_msg)
+  endtry
+
+  let l:result = getline(1, line('$'))
+  if l:result ==# a:expected | return 1 | endif
+
+  let l:fail_msg += ['result:']
+  let l:fail_msg += map(l:result, '"  " . v:val')
+  call s:fail(l:fail_msg)
+endfunction
+
+" }}}1
+function! vimtex#test#main(file, expected) abort " {{{1
+  execute 'silent edit' fnameescape(a:file)
+
+  let l:expected = empty(a:expected) ? '' : fnamemodify(a:expected, ':p')
+  call vimtex#test#assert(exists('b:vimtex'))
+  call vimtex#test#assert_equal(l:expected, b:vimtex.tex)
+
+  bwipeout!
 endfunction
 
 " }}}1
@@ -61,7 +89,7 @@ function! s:fail(...) abort " {{{1
   echo 'Assertion failed!'
 
   if a:0 > 0 && !empty(a:1)
-    if type(a:1) == type('')
+    if type(a:1) == v:t_string
       echo a:1
     else
       for line in a:1

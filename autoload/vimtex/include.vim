@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -61,6 +61,8 @@ function! s:input(fname, type) abort " {{{1
   if l:lnum == 0 | return a:fname | endif
 
   let l:cmd = vimtex#cmd#get_at(l:lnum, l:cnum)
+  if empty(l:cmd) | return a:fname | endif
+
   let l:file = join(map(
         \   get(l:cmd, 'args', [{}]),
         \   "get(v:val, 'text', '')"),
@@ -68,7 +70,7 @@ function! s:input(fname, type) abort " {{{1
   let l:file = substitute(l:file, '^\s*"\|"\s*$', '', 'g')
   let l:file = substitute(l:file, '\\space', '', 'g')
 
-  if strpart(l:file, -3) !=# a:type
+  if l:file[-3:] !=# a:type
     let l:file .= '.' . a:type
   endif
 
@@ -78,7 +80,8 @@ endfunction
 " }}}1
 function! s:search_candidates_texinputs(fname) abort " {{{1
   for l:suffix in [''] + split(&l:suffixesadd, ',')
-    let l:candidates = glob(b:vimtex.root . '/**/' . a:fname . l:suffix, 0, 1)
+    let l:candidates = glob(b:vimtex.root . '/**/'
+          \ . fnameescape(a:fname) . l:suffix, 0, 1)
     if !empty(l:candidates)
       return l:candidates[0]
     endif
@@ -110,12 +113,8 @@ function! s:search_candidates_kpsewhich(fname) abort " {{{1
   endfor
 
   for l:file in l:candidates
-    if !has_key(s:kpsewhich_cache, l:file)
-      let l:candidate = vimtex#kpsewhich#find(l:file)
-      let s:kpsewhich_cache[l:file] = filereadable(l:candidate) ? l:candidate : ''
-    endif
-
-    if !empty(s:kpsewhich_cache[l:file]) | return s:kpsewhich_cache[l:file] | endif
+    let l:candidate = vimtex#kpsewhich#find(l:file)
+    if !empty(l:candidate) && filereadable(l:candidate) | return l:candidate | endif
   endfor
 
   return ''
@@ -145,5 +144,3 @@ function! s:visited.check(fname) abort dict " {{{1
 endfunction
 
 " }}}1
-
-let s:kpsewhich_cache = {}

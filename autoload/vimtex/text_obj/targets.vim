@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -6,8 +6,8 @@
 
 function! vimtex#text_obj#targets#enabled() abort " {{{1
   return exists('g:loaded_targets')
-        \ && (   (type(g:loaded_targets) == type(0)  && g:loaded_targets)
-        \     || (type(g:loaded_targets) == type('') && !empty(g:loaded_targets)))
+        \ && (   (type(g:loaded_targets) == v:t_number && g:loaded_targets)
+        \     || (type(g:loaded_targets) == v:t_string && !empty(g:loaded_targets)))
         \ && (   g:vimtex_text_obj_variant ==# 'auto'
         \     || g:vimtex_text_obj_variant ==# 'targets')
 endfunction

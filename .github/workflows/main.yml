@@ -1,6 +1,12 @@
 name: CI tests
 
 on:
+  pull_request:
+    paths-ignore:
+      - 'doc/*'
+      - 'docker/*'
+      - 'media/*'
+      - '*.md'
   push:
     paths-ignore:
       - 'doc/*'
@@ -12,31 +18,27 @@ jobs:
   run-tests:
     name: Test on ubuntu-latest
     runs-on: ubuntu-latest
+    if: |
+      ! startsWith(github.event.head_commit.message, 'doc:')
     steps:
     - name: Install packages
       run: |
+        sudo add-apt-repository ppa:neovim-ppa/stable
         sudo apt update
-        sudo apt install neovim
-        sudo apt install texlive texlive-latex-extra texlive-extra-utils
-        sudo apt install latexmk
-        sudo apt install gcc moreutils
-        sudo apt install libmodule-build-perl
-        sudo apt install libconfig-autoconf-perl
-        sudo apt install libextutils-libbuilder-perl
-    - name: Install bibparse
-      run: |
-        wget https://search.cpan.org/CPAN/authors/id/A/AM/AMBS/Text-BibTeX-0.85.tar.gz
-        tar zxf Text-BibTeX-0.85.tar.gz
-        cd Text-BibTeX-0.85
-        perl Build.PL
-        ./Build
-        sudo ./Build install
+        sudo apt install neovim \
+          texlive texlive-latex-extra texlive-extra-utils \
+          texlive-bibtex-extra libtext-bibtex-perl \
+          latexmk \
+          gcc moreutils \
+          libmodule-build-perl \
+          libconfig-autoconf-perl \
+          libextutils-libbuilder-perl
     - uses: actions/checkout@master
       with:
         fetch-depth: 1
     - name: Test with neovim
-      run: cd test/tests && make -j1
+      run: cd test && make -j1
     - name: Test with vim
       env:
-        MYVIM: vim -T dumb --not-a-term --noplugin -n
-      run: cd test/tests && make -j1
+        MYVIM: vim -T dumb --not-a-term -n
+      run: cd test && make -j1

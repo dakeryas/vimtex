@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -50,6 +50,17 @@ function! vimtex#log#toggle_verbose() abort " {{{1
 endfunction
 
 " }}}1
+function! vimtex#log#set_silent() abort " {{{1
+  let s:logger.verbose_old = get(s:logger, 'verbose_old', s:logger.verbose)
+  let s:logger.verbose = 0
+endfunction
+
+" }}}1
+function! vimtex#log#set_silent_restore() abort " {{{1
+  let s:logger.verbose = get(s:logger, 'verbose_old', s:logger.verbose)
+endfunction
+
+" }}}1
 
 
 let s:logger = {
@@ -65,10 +76,10 @@ let s:logger = {
 function! s:logger.add(msg_arg, type) abort dict " {{{1
   let l:msg_list = []
   for l:msg in a:msg_arg
-    if type(l:msg) == type('')
+    if type(l:msg) == v:t_string
       call add(l:msg_list, l:msg)
-    elseif type(l:msg) == type([])
-      call extend(l:msg_list, filter(l:msg, "type(v:val) == type('')"))
+    elseif type(l:msg) == v:t_list
+      call extend(l:msg_list, filter(l:msg, 'type(v:val) == v:t_string'))
     endif
   endfor
 
@@ -87,12 +98,12 @@ function! s:logger.add(msg_arg, type) abort dict " {{{1
   endfor
 
   call vimtex#echo#formatted([
-        \ [self.type_to_highlight[a:type], 'vimtex:'],
+        \ [self.type_to_highlight[a:type], 'VimTeX:'],
         \ ' ' . l:msg_list[0]
         \])
-  for l:line in l:msg_list[1:]
-    call vimtex#echo#echo('        ' . l:line)
-  endfor
+  if len(l:msg_list) > 1
+    call vimtex#echo#echo(join(map(l:msg_list[1:], "'        ' . v:val"), "\n"))
+  endif
 endfunction
 
 " }}}1

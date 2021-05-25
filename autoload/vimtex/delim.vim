@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -230,8 +230,9 @@ function! vimtex#delim#change_with_args(open, close, new) abort " {{{1
     let [l:beg, l:end] = ['{', '}']
   else
     let l:side = a:new =~# g:vimtex#delim#re.delim_math.close
-    let l:index = index(map(copy(g:vimtex#delim#lists.delim_math.name),
-          \   'v:val[' . l:side . ']'),
+    let l:index = index(map(
+          \   copy(g:vimtex#delim#lists.delim_math.name),
+          \   {_, x -> x[l:side]}),
           \ a:new)
     if l:index >= 0
       let [l:beg, l:end] = g:vimtex#delim#lists.delim_math.name[l:index]
@@ -271,7 +272,7 @@ function! vimtex#delim#change_input_complete(lead, cmdline, pos) abort " {{{1
   let l:close = map(copy(l:all), 'v:val[1]')
 
   let l:lead_re = escape(a:lead, '\$[]')
-  return filter(l:open + l:close, 'v:val =~# ''^' . l:lead_re . '''')
+  return filter(l:open + l:close, {_, x -> v:val =~# '^' . l:lead_re})
 endfunction
 
 " }}}1
@@ -346,6 +347,7 @@ function! vimtex#delim#get_matching(delim) abort " {{{1
     else
       unlet l:matching.env_cmd
     endif
+    let l:matching.name = matchstr(l:match, '{\zs\k*\ze\*\?}')
   endif
 
   return l:matching
@@ -420,7 +422,6 @@ function! s:snr() abort " {{{1
 endfunction
 
 " }}}1
-"
 
 function! s:get_delim(opts) abort " {{{1
   "
@@ -471,7 +472,7 @@ function! s:get_delim(opts) abort " {{{1
     if l:lnum == 0 | break | endif
 
     if has_key(a:opts, 'syn_exclude')
-          \ && vimtex#util#in_syntax(a:opts.syn_exclude, l:lnum, l:cnum)
+          \ && vimtex#syntax#in(a:opts.syn_exclude, l:lnum, l:cnum)
       call vimtex#pos#set_cursor(vimtex#pos#prev(l:lnum, l:cnum))
       continue
     endif
@@ -558,8 +559,8 @@ function! s:parser_env(match, lnum, cnum, ...) abort " {{{1
         \ : substitute(a:match, 'end', 'begin', '')
 
   let result.re = {
-        \ 'open' : '\m\\begin\s*{' . result.name . '\*\?}',
-        \ 'close' : '\m\\end\s*{' . result.name . '\*\?}',
+        \ 'open' : '\m\\begin\s*{\w\+\*\?}',
+        \ 'close' : '\m\\end\s*{\w\+\*\?}',
         \}
 
   let result.re.this = result.is_open ? result.re.open  : result.re.close
@@ -589,8 +590,8 @@ function! s:parser_tex(match, lnum, cnum, side, type, direction) abort " {{{1
         \ 'open'  : '\m' . escape(a:match, '$'),
         \ 'close' : '\m' . escape(a:match, '$'),
         \}
-  let result.side = vimtex#util#in_syntax(
-        \   (a:match ==# '$' ? 'texMathZoneX' : 'texMathZoneY'),
+  let result.side = vimtex#syntax#in(
+        \   (a:match ==# '$' ? 'texMathZoneX' : 'texMathZoneXX'),
         \   a:lnum, a:cnum+1)
         \ ? 'open' : 'close'
   let result.is_open = result.side ==# 'open'
@@ -646,8 +647,10 @@ function! s:parser_latex(match, lnum, cnum, ...) abort " {{{1
         \ : substitute(substitute(a:match, '\]', '[', ''), ')', '(', '')
 
   let result.re = {
-        \ 'open'  : a:match =~# '\\(\|\\)' ? '\m\\(' : '\m\\\[',
-        \ 'close' : a:match =~# '\\(\|\\)' ? '\m\\)' : '\m\\\]',
+        \ 'open'  : g:vimtex#re#not_bslash
+        \   . (a:match =~# '\\(\|\\)' ? '\m\\(' : '\m\\\['),
+        \ 'close' : g:vimtex#re#not_bslash
+        \   . (a:match =~# '\\(\|\\)' ? '\m\\)' : '\m\\\]'),
         \}
 
   let result.re.this = result.is_open ? result.re.open  : result.re.close
@@ -765,8 +768,9 @@ function! s:parser_delim_get_regexp(delim, side, ...) abort " {{{1
   endif
 
   " Next check normal delimiters
-  let l:index = index(map(copy(g:vimtex#delim#lists[l:type].name),
-        \   'v:val[' . a:side . ']'),
+  let l:index = index(map(
+        \   copy(g:vimtex#delim#lists[l:type].name),
+        \   {_, x -> x[a:side]}),
         \ a:delim)
   return l:index >= 0
         \ ? g:vimtex#delim#lists[l:type].re[l:index][a:side]
@@ -909,6 +913,10 @@ function! s:init_delim_lists() abort " {{{1
         \   'name' : [
         \     ['[', ']'],
         \     ['{', '}'],
+        \   ],
+        \   're' : [
+        \     ['\[', '\]'],
+        \     ['\\\@<!{', '\\\@<!}'],
         \   ]
         \ },
         \ 'delim_math' : {
@@ -958,7 +966,7 @@ function! s:init_delim_lists() abort " {{{1
   for l:type in values(l:lists)
     if !has_key(l:type, 're') && has_key(l:type, 'name')
       let l:type.re = map(deepcopy(l:type.name),
-            \ 'map(v:val, ''escape(v:val, ''''\$[]'''')'')')
+            \ {i1, x -> map(x, {i2, y -> escape(y, '\$[]')})})
     endif
   endfor
 
@@ -995,11 +1003,11 @@ function! s:init_delim_regexes() abort " {{{1
   " Matches modified math delimiters
   "
   let l:re.delim_mod_math = {
-        \ 'open' : '\%(\%(' . l:re.mods.open . '\)\)\s*\%('
+        \ 'open' : '\%(\%(' . l:re.mods.open . '\)\)\s*\\\@<!\%('
         \   . l:o . '\)\|\\left\s*\.',
-        \ 'close' : '\%(\%(' . l:re.mods.close . '\)\)\s*\%('
+        \ 'close' : '\%(\%(' . l:re.mods.close . '\)\)\s*\\\@<!\%('
         \   . l:c . '\)\|\\right\s*\.',
-        \ 'both' : '\%(\%(' . l:re.mods.both . '\)\)\s*\%('
+        \ 'both' : '\%(\%(' . l:re.mods.both . '\)\)\s*\\\@<!\%('
         \   . l:o . '\|' . l:c . '\)\|\\\%(left\|right\)\s*\.',
         \}
 
@@ -1007,11 +1015,11 @@ function! s:init_delim_regexes() abort " {{{1
   " Matches possibly modified math delimiters
   "
   let l:re.delim_modq_math = {
-        \ 'open' : '\%(\%(' . l:re.mods.open . '\)\s*\)\?\%('
+        \ 'open' : '\%(\%(' . l:re.mods.open . '\)\s*\)\?\\\@<!\%('
         \   . l:o . '\)\|\\left\s*\.',
-        \ 'close' : '\%(\%(' . l:re.mods.close . '\)\s*\)\?\%('
+        \ 'close' : '\%(\%(' . l:re.mods.close . '\)\s*\)\?\\\@<!\%('
         \   . l:c . '\)\|\\right\s*\.',
-        \ 'both' : '\%(\%(' . l:re.mods.both . '\)\s*\)\?\%('
+        \ 'both' : '\%(\%(' . l:re.mods.both . '\)\s*\)\?\\\@<!\%('
         \   . l:o . '\|' . l:c . '\)\|\\\%(left\|right\)\s*\.',
         \}
 
@@ -1040,9 +1048,9 @@ function! s:init_delim_regexes_generator(list_name) abort " {{{1
   let l:close = join(map(copy(l:list.re), 'v:val[1]'), '\|')
 
   return {
-        \ 'open' : '\%(' . l:open . '\)',
-        \ 'close' : '\%(' . l:close . '\)',
-        \ 'both' : '\%(' . l:open . '\|' . l:close . '\)'
+        \ 'open' : '\\\@<!\%(' . l:open . '\)',
+        \ 'close' : '\\\@<!\%(' . l:close . '\)',
+        \ 'both' : '\\\@<!\%(' . l:open . '\|' . l:close . '\)'
         \}
 endfunction
 

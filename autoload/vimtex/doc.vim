@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -46,35 +46,10 @@ function! vimtex#doc#make_selection(context) abort " {{{1
     return
   endif
 
-  if len(a:context.candidates) == 1
-    let a:context.selected = a:context.candidates[0]
-    return
-  endif
-
-  call vimtex#echo#echo('Multiple candidates detected, please select one:')
-  let l:count = 0
-  for l:package in a:context.candidates
-    let l:count += 1
-    call vimtex#echo#formatted([
-          \ '  [' . string(l:count) . '] ',
-          \ ['VimtexSuccess', l:package]
-          \])
-  endfor
-
-  call vimtex#echo#echo('Type number (everything else cancels): ')
-  let l:choice = nr2char(getchar())
-  if l:choice !~# '\d'
-        \ || l:choice == 0
-        \ || l:choice > len(a:context.candidates)
-    echohl VimtexWarning
-    echon l:choice =~# '\d' ? l:choice : '-'
-    echohl NONE
-    let a:context.selected = ''
-  else
-    echon l:choice
-    let a:context.selected = a:context.candidates[l:choice-1]
-    let a:context.ask_before_open = 0
-  endif
+  let a:context.selected = vimtex#ui#choose(a:context.candidates, {
+        \ 'prompt': 'Multiple candidates detected, please select one:',
+        \})
+  let a:context.ask_before_open = len(a:context.candidates) == 1
 endfunction
 
 " }}}1
@@ -87,6 +62,8 @@ function! s:packages_get_from_cursor() abort " {{{1
     return s:packages_from_usepackage(l:cmd)
   elseif l:cmd.name ==# '\documentclass'
     return s:packages_from_documentclass(l:cmd)
+  elseif l:cmd.name =~# '\v\\%(begin|end)$'
+    return s:packages_from_environment(l:cmd)
   else
     return s:packages_from_command(strpart(l:cmd.name, 1))
   endif
@@ -131,6 +108,18 @@ function! s:packages_from_documentclass(cmd) abort " {{{1
 endfunction
 
 " }}}1
+function! s:packages_from_environment(cmd) abort " {{{1
+  try
+    let l:env = a:cmd.args[0].text
+  catch
+    call vimtex#log#warning('Could not parse the environment name!')
+    return {}
+  endtry
+
+  return s:packages_from_command('\begin{' . l:env . '}')
+endfunction
+
+" }}}1
 function! s:packages_from_command(cmd) abort " {{{1
   let l:packages = [
         \ 'default',
@@ -141,10 +130,11 @@ function! s:packages_from_command(cmd) abort " {{{1
   let l:queue = copy(l:packages)
   while !empty(l:queue)
     let l:current = remove(l:queue, 0)
-    let l:includes = filter(readfile(s:complete_dir . l:current), 'v:val =~# ''^\#\s*include:''')
+    let l:includes = filter(readfile(s:complete_dir . l:current),
+          \ 'v:val =~# ''^\#\s*include:''')
     if empty(l:includes) | continue | endif
 
-    call map(l:includes, 'matchstr(v:val, ''include:\s*\zs.*\ze\s*$'')')
+    call map(l:includes, {_, x -> matchstr(x, 'include:\s*\zs.*\ze\s*$')})
     call filter(l:includes, 'filereadable(s:complete_dir . v:val)')
     call filter(l:includes, 'index(l:packages, v:val) < 0')
 
@@ -153,9 +143,10 @@ function! s:packages_from_command(cmd) abort " {{{1
   endwhile
 
   let l:candidates = []
-  let l:filter = 'v:val =~# ''^' . a:cmd . '\>'''
   for l:package in l:packages
-    let l:cmds = filter(readfile(s:complete_dir . l:package), l:filter)
+    let l:cmds = filter(
+          \ readfile(s:complete_dir . l:package),
+          \ {_, x -> x ==# a:cmd})
     if empty(l:cmds) | continue | endif
 
     if l:package ==# 'default'
@@ -173,13 +164,13 @@ function! s:packages_from_command(cmd) abort " {{{1
 endfunction
 
 " }}}1
-function! s:packages_remove_invalid(context) abort " {{{1
-  let l:invalid_packages = filter(copy(a:context.candidates),
-        \   'empty(vimtex#kpsewhich#find(v:val . ''.sty'')) && '
-        \ . 'empty(vimtex#kpsewhich#find(v:val . ''.cls''))')
 
-  call filter(l:invalid_packages,
-        \ 'index([''latex2e'', ''lshort''], v:val) < 0')
+function! s:packages_remove_invalid(context) abort " {{{1
+  let l:invalid_packages = filter(copy(a:context.candidates), {_, x ->
+        \    empty(vimtex#kpsewhich#find(x . '.sty'))
+        \ && empty(vimtex#kpsewhich#find(x . '.cls'))})
+
+  call filter(l:invalid_packages, "index(['latex2e', 'lshort'], v:val) < 0")
 
   " Warn about invalid candidates
   if !empty(l:invalid_packages)
@@ -228,17 +219,7 @@ function! s:packages_open(context) abort " {{{1
     endif
   endif
 
-  let l:os = vimtex#util#get_os()
-  let l:url = 'http://texdoc.net/pkg/' . a:context.selected
-
-  silent execute (l:os ==# 'linux'
-        \         ? '!xdg-open'
-        \         : (l:os ==# 'mac'
-        \            ? '!open'
-        \            : '!start'))
-        \ . ' ' . l:url
-        \ . (l:os ==# 'win' ? '' : ' &')
-
+  call vimtex#util#www('http://texdoc.net/pkg/' . a:context.selected)
   redraw!
 endfunction
 

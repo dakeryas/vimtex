@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -19,7 +19,7 @@ let s:source = {
 
 function! s:source.gather_candidates(args, context) abort " {{{1
   if exists('b:vimtex')
-    let s:source.entries = vimtex#parser#toc(b:vimtex.tex)
+    let s:source.entries = vimtex#parser#toc()
     let s:source.maxlevel = max(map(copy(s:source.entries), 'v:val.level'))
   endif
   return map(copy(s:source.entries),

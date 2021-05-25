@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -45,7 +45,7 @@ function! vimtex#misc#wordcount(...) abort " {{{1
   if l:range == [1, line('$')]
     let l:file = b:vimtex
   else
-    let l:file = vimtex#parser#selection_to_texfile('arg', l:range)
+    let l:file = vimtex#parser#selection_to_texfile({'range': l:range})
   endif
 
   let cmd  = 'cd ' . vimtex#util#shellescape(l:file.root)
@@ -93,7 +93,7 @@ function! vimtex#misc#wordcount_display(opts) abort " {{{1
   0delete _
 
   " Set mappings
-  nnoremap <buffer><nowait><silent> q :bwipeout<cr>
+  nnoremap <silent><buffer><nowait> q :bwipeout<cr>
 
   " Set buffer options
   setlocal bufhidden=wipe
@@ -134,6 +134,7 @@ if get(s:, 'reload_guard', 1)
 
     " Reload syntax
     if l:reload_syntax
+      syntax clear
       runtime! syntax/tex.vim
     endif
 

@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -8,7 +8,9 @@ if exists('b:did_indent')
   finish
 endif
 
-if !get(g:, 'vimtex_indent_enabled', 1) | finish | endif
+call vimtex#options#init()
+
+if !g:vimtex_indent_enabled | finish | endif
 
 let b:did_vimtex_indent = 1
 let b:did_indent = 1
@@ -33,7 +35,7 @@ endfunction
 
 "}}}
 function! VimtexIndent(lnum) abort " {{{1
-  let s:sw = exists('*shiftwidth') ? shiftwidth() : &shiftwidth
+  let s:sw = shiftwidth()
 
   let [l:prev_lnum, l:prev_line] = s:get_prev_lnum(prevnonblank(a:lnum - 1))
   if l:prev_lnum == 0 | return indent(a:lnum) | endif
@@ -55,11 +57,15 @@ function! VimtexIndent(lnum) abort " {{{1
   let l:prev_lnum = s:indent_amps.prev_lnum
   let l:prev_line = s:indent_amps.prev_line
 
-  " Indent environments, delimiters, and tikz
+  " Indent environments, delimiters, and conditionals
   let l:ind += s:indent_envs(l:line, l:prev_line)
   let l:ind += s:indent_delims(l:line, a:lnum, l:prev_line, l:prev_lnum)
   let l:ind += s:indent_conditionals(l:line, a:lnum, l:prev_line, l:prev_lnum)
-  let l:ind += s:indent_tikz(l:prev_lnum, l:prev_line)
+
+  " Indent tikz commands
+  if g:vimtex_indent_tikz_commands
+    let l:ind += s:indent_tikz(l:prev_lnum, l:prev_line)
+  endif
 
   return l:ind
 endfunction
@@ -88,9 +94,14 @@ endfunction
 
 " }}}1
 function! s:is_verbatim(line, lnum) abort " {{{1
-  return a:line !~# '\v\\%(begin|end)\{%(verbatim|lstlisting|minted)'
-        \ && vimtex#env#is_inside('\%(lstlisting\|verbatim\|minted\)')[0]
+  return a:line !~# s:verbatim_re_envdelim
+        \ && vimtex#env#is_inside(s:verbatim_re_list)[0]
 endfunction
+
+let s:verbatim_envs = ['lstlisting', 'verbatim', 'minted', 'markdown']
+let s:verbatim_re_list = '\%(' . join(s:verbatim_envs, '\|') . '\)'
+let s:verbatim_re_envdelim = '\v\\%(begin|end)\{%('
+      \ . join(s:verbatim_envs, '|') . ')'
 
 " }}}1
 
@@ -104,7 +115,7 @@ function! s:indent_amps.check(lnum, cline, plnum, pline) abort dict " {{{1
   let self.prev_lnum = a:plnum
   let self.prev_line = a:pline
   let self.prev_ind = a:plnum > 0 ? indent(a:plnum) : 0
-  if !get(g:, 'vimtex_indent_on_ampersands', 1) | return self.prev_ind | endif
+  if !g:vimtex_indent_on_ampersands | return self.prev_ind | endif
 
   if a:cline =~# self.re_align
         \ || a:cline =~# self.re_amp
@@ -139,7 +150,7 @@ function! s:indent_amps.parse_context(lnum, line) abort dict " {{{1
   while l:lnum >= 1
     let l:line = getline(l:lnum)
 
-    if l:line =~# '\v^\s*%(}|\\%(end|]))'
+    if l:line =~# '\v%(^\s*%(}|\\])|\\end\s*\{\w+\*?})'
       let l:depth += 1
     endif
 
@@ -195,15 +206,9 @@ endfunction
 
 let s:envs_begin = '\\begin{.*}\|\\\@<!\\\['
 let s:envs_end = '\\end{.*}\|\\\]'
-let s:envs_ignored = '\v'
-      \ . join(get(g:, 'vimtex_indent_ignored_envs', ['document']), '|')
+let s:envs_ignored = '\v' . join(g:vimtex_indent_ignored_envs, '|')
 
-let s:envs_lists = join(get(g:, 'vimtex_indent_lists', [
-      \ 'itemize',
-      \ 'description',
-      \ 'enumerate',
-      \ 'thebibliography',
-      \]), '\|')
+let s:envs_lists = join(g:vimtex_indent_lists, '\|')
 let s:envs_item = '^\s*\\item'
 let s:envs_beglist = '\\begin{\%(' . s:envs_lists . '\)'
 let s:envs_endlist =   '\\end{\%(' . s:envs_lists . '\)'
@@ -228,7 +233,7 @@ let s:re_opt = extend({
       \ 'close' : ['}'],
       \ 'close_indented' : 0,
       \ 'include_modified_math' : 1,
-      \}, get(g:, 'vimtex_indent_delims', {}))
+      \}, g:vimtex_indent_delims)
 let s:re_open = join(s:re_opt.open, '\|')
 let s:re_close = join(s:re_opt.close, '\|')
 if s:re_opt.include_modified_math
@@ -239,21 +244,7 @@ endif
 " }}}1
 function! s:indent_conditionals(line, lnum, prev_line, prev_lnum) abort " {{{1
   if !exists('s:re_cond')
-    let l:cfg = {}
-
-    if exists('g:vimtex_indent_conditionals')
-      let l:cfg = g:vimtex_indent_conditionals
-      if empty(l:cfg)
-        let s:re_cond = {}
-        return 0
-      endif
-    endif
-
-    let s:re_cond = extend({
-          \ 'open': '\v(\\newif\s*)@<!\\if(f|field|name|numequal|thenelse)@!',
-          \ 'else': '\\else\>',
-          \ 'close': '\\fi\>',
-          \}, l:cfg)
+    let s:re_cond = g:vimtex_indent_conditionals
   endif
 
   if empty(s:re_cond) | return 0 | endif
@@ -309,6 +300,7 @@ let s:tikz_commands = '\v\\%(' . join([
         \ 'path',
         \ 'node',
         \ 'coordinate',
+        \ 'clip',
         \ 'add%(legendentry|plot)',
       \ ], '|') . ')'
 

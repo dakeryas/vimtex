@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -6,67 +6,54 @@
 
 scriptencoding utf-8
 
-function! vimtex#syntax#p#amsmath#load() abort " {{{1
-  if has_key(b:vimtex_syntax, 'amsmath') | return | endif
-  let b:vimtex_syntax.amsmath = 1
+function! vimtex#syntax#p#amsmath#load(cfg) abort " {{{1
+  call vimtex#syntax#core#new_region_math('align')
+  call vimtex#syntax#core#new_region_math('alignat')
+  call vimtex#syntax#core#new_region_math('flalign')
+  call vimtex#syntax#core#new_region_math('gather')
+  call vimtex#syntax#core#new_region_math('mathpar')
+  call vimtex#syntax#core#new_region_math('multline')
+  call vimtex#syntax#core#new_region_math('xalignat')
+  call vimtex#syntax#core#new_region_math('xxalignat', {'starred': 0})
 
-  " Allow subequations (fixes #1019)
-  " - This should be temporary, as it seems subequations is erroneously part of
-  "   texBadMath from Charles Campbell's syntax plugin.
-  syntax match texBeginEnd
-        \ "\(\\begin\>\|\\end\>\)\ze{subequations}"
-        \ nextgroup=texBeginEndName
-
-  call VimtexNewMathZone('E', 'align', 1)
-  call VimtexNewMathZone('F', 'alignat', 1)
-  call VimtexNewMathZone('H', 'flalign', 1)
-  call VimtexNewMathZone('I', 'gather', 1)
-  call VimtexNewMathZone('J', 'multline', 1)
-  call VimtexNewMathZone('K', 'xalignat', 1)
-  call VimtexNewMathZone('L', 'xxalignat', 0)
-  call VimtexNewMathZone('M', 'mathpar', 1)
-
-  " Amsmath [lr][vV]ert  (Holger Mitschke)
-  if has('conceal') && &enc ==# 'utf-8' && get(g:, 'tex_conceal', 'd') =~# 'd'
-    for l:texmath in [
-          \ ['\\lvert', '|'] ,
-          \ ['\\rvert', '|'] ,
-          \ ['\\lVert', '‖'] ,
-          \ ['\\rVert', '‖'] ,
-          \ ]
-        execute "syntax match texMathDelim '\\\\[bB]igg\\=[lr]\\="
-              \ . l:texmath[0] . "' contained conceal cchar=" . l:texmath[1]
-    endfor
+  " Amsmath [lr][vV]ert
+  if &encoding ==# 'utf-8' && g:vimtex_syntax_conceal.math_delimiters
+    syntax match texMathDelim contained conceal cchar=| "\\\%([bB]igg\?l\|left\)\\lvert"
+    syntax match texMathDelim contained conceal cchar=| "\\\%([bB]igg\?r\|right\)\\rvert"
+    syntax match texMathDelim contained conceal cchar=‖ "\\\%([bB]igg\?l\|left\)\\lVert"
+    syntax match texMathDelim contained conceal cchar=‖ "\\\%([bB]igg\?r\|right\)\\rVert"
   endif
+
+  syntax match texMathCmdEnv contained contains=texCmdMathEnv nextgroup=texMathArrayArg skipwhite skipnl "\\begin{subarray}"
+  syntax match texMathCmdEnv contained contains=texCmdMathEnv nextgroup=texMathArrayArg skipwhite skipnl "\\begin{x\?alignat\*\?}"
+  syntax match texMathCmdEnv contained contains=texCmdMathEnv nextgroup=texMathArrayArg skipwhite skipnl "\\begin{xxalignat}"
+  syntax match texMathCmdEnv contained contains=texCmdMathEnv                                            "\\end{subarray}"
+  syntax match texMathCmdEnv contained contains=texCmdMathEnv                                            "\\end{x\?alignat\*\?}"
+  syntax match texMathCmdEnv contained contains=texCmdMathEnv                                            "\\end{xxalignat}"
+
+  " DeclareMathOperator
+  syntax match texCmdDeclmathoper nextgroup=texDeclmathoperArgName skipwhite skipnl "\\DeclareMathOperator\>\*\?"
+  call vimtex#syntax#core#new_arg('texDeclmathoperArgName', {
+        \ 'next': 'texDeclmathoperArgBody',
+        \ 'contains': ''
+        \})
+  call vimtex#syntax#core#new_arg('texDeclmathoperArgBody')
+
+  " \tag{label} or \tag*{label}
+  syntax match texMathCmd "\\tag\>\*\?" contained nextgroup=texMathTagArg
+  call vimtex#syntax#core#new_arg('texMathTagArg')
+
+  " Conceal the command and delims of "\operatorname{ ... }"
+  if g:vimtex_syntax_conceal.math_delimiters
+    syntax region texMathConcealedArg contained matchgroup=texMathCmd
+          \ start="\\operatorname\*\?\s*{" end="}"
+          \ concealends
+    syntax cluster texClusterMath add=texMathConcealedArg
+  endif
+
+  highlight def link texCmdDeclmathoper     texCmdNew
+  highlight def link texDeclmathoperArgName texArgNew
+  highlight def link texMathConcealedArg    texMathTextArg
 endfunction
 
 " }}}1
-
-function! VimtexNewMathZone(sfx, mathzone, starred) abort " {{{1
-  " This function is based on Charles E. Campbell's amsmath.vba file 2018-06-29
-
-  if get(g:, 'tex_fast', 'M') !~# 'M' | return | endif
-
-  let foldcmd = get(g:, 'tex_fold_enabled') ? ' fold' : ''
-
-  let grp = 'texMathZone' . a:sfx
-  execute 'syntax cluster texMathZones add=' . grp
-  execute 'syntax region ' . grp
-        \ . ' start=''\\begin\s*{\s*' . a:mathzone . '\s*}'''
-        \ . ' end=''\\end\s*{\s*' . a:mathzone . '\s*}'''
-        \ . foldcmd . ' keepend contains=@texMathZoneGroup'
-  execute 'highlight def link '.grp.' texMath'
-
-  if a:starred
-    let grp .= 'S'
-    execute 'syntax cluster texMathZones add=' . grp
-    execute 'syntax region ' . grp
-          \ . ' start=''\\begin\s*{\s*' . a:mathzone . '\*\s*}'''
-          \ . ' end=''\\end\s*{\s*' . a:mathzone . '\*\s*}'''
-          \ . foldcmd . ' keepend contains=@texMathZoneGroup'
-    execute 'highlight def link '.grp.' texMath'
-  endif
-
-  execute 'syntax match texBadMath ''\\end\s*{\s*' . a:mathzone . '\*\=\s*}'''
-endfunction
-

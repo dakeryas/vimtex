@@ -1,4 +1,4 @@
-" vimtex - LaTeX plugin for Vim
+" VimTeX - LaTeX plugin for Vim
 "
 " Maintainer: Karl Yngve Lervåg
 " Email:      karl.yngve@gmail.com
@@ -18,7 +18,7 @@ let s:qf = {
 function! s:qf.init(state) abort dict "{{{1
   if !executable('pulp')
     call vimtex#log#error('pulp is not executable!')
-    throw 'vimtex: Requirements not met'
+    throw 'VimTeX: Requirements not met'
   endif
 
   " Automatically remove the -file-line-error option if we use the latexmk
@@ -43,26 +43,18 @@ function! s:qf.set_errorformat() abort dict "{{{1
 endfunction
 
 " }}}1
-function! s:qf.setqflist(tex, log, jump) abort dict " {{{1
+function! s:qf.addqflist(tex, log) abort dict " {{{1
   if empty(a:log) || !filereadable(a:log)
     call setqflist([])
-    throw 'Vimtex: No log file found'
+    throw 'VimTeX: No log file found'
   endif
 
   let l:tmp = fnameescape(fnamemodify(a:log, ':r') . '.pulp')
   let l:log = fnameescape(a:log)
 
   silent call system(printf('pulp %s >%s', l:log, l:tmp))
-  let self.errorformat_saved = &l:errorformat
-  call self.set_errorformat()
-  execute (a:jump ? 'cfile' : 'cgetfile') l:tmp
-  let &l:errorformat = self.errorformat_saved
+  call vimtex#qf#u#caddfile(self, l:tmp)
   silent call system('rm ' . l:tmp)
-
-  try
-    call setqflist([], 'r', {'title': 'Vimtex errors (' . self.name . ')'})
-  catch
-  endtry
 endfunction
 
 " }}}1
